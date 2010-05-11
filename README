@@ -1,0 +1,2 @@
+Makefile      automates building from sources, as usual
+sat           a simple SAT solver
