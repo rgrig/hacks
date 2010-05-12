@@ -5,7 +5,7 @@ TEX=tex
 CFLAGS=-Wall -W -pedantic -std=c99 -g
 LDFLAGS=
 
-EXE=sat
+EXE=sat minmodels
 PDF=$(patsubst %,%.pdf,$(EXE))
 
 all :exe pdf
@@ -15,6 +15,8 @@ exe: $(EXE)
 pdf: $(PDF)
 
 sat: sat.o
+
+minmodels: minmodels.o
 
 %.pdf: %.tex
 	pdftex $* 
