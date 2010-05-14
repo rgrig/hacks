@@ -2,8 +2,10 @@ CC=gcc
 CWEAVE=cweave
 CTANGLE=ctangle
 TEX=tex
-CFLAGS=-Wall -W -pedantic -std=c99 -g
+CFLAGS=-Wall -W -pedantic -std=c99 -g -O3
 LDFLAGS=
+#CFLAGS=-std=c99 -g --coverage
+#LDFLAGS=--coverage
 
 EXE=sat minmodels
 PDF=$(patsubst %,%.pdf,$(EXE))
@@ -24,3 +26,4 @@ minmodels: minmodels.o
 clean:
 	rm -f *.o *.log *.idx *.scn *.toc
 	rm -f $(EXE) $(PDF)
+	rm -f *.gcov *.gcno *.gcda gmon.out
