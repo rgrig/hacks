@@ -1,3 +1,3 @@
 Makefile      automates building from sources, as usual
-minmodels     generates the minimal models of a CNF formula
+minmodels     finds the minimal models of a CNF formula (aka prime implicants)
 sat           a simple SAT solver
