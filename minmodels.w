@@ -14,6 +14,7 @@ structure for conflicts.
 @<Operations on conflicts@>@;
 
 int main() @+ {
+  @<Initialize@>@;
   @<Read DIMACS@>@;
   @<Compute minimal models@>@;
   @<Print result@>@;
@@ -92,7 +93,7 @@ side-effects in the actual arguments for the |check| macro. Also, beware that a
 @d trace_search (1<<2)
 @d trace_hash (1<<3)
 @d trace_all (-1)
-@d trace (trace_models) // what tracing is activated
+@d trace (0) // what tracing is activated
 
 @ @<Includes@>=
 #include <stdlib.h>
@@ -221,9 +222,9 @@ struct dd_node dd_table[1<<dd_bits]; // |variable==0| means empty slot
 int dd_table_used = 0; // used only in |safe| mode
 
 @ The simplest algorithm on |dd_node|s is a recursive depth-first traversal
-that zeros the |auxiliary| field of all reachable |dd_node|s. For the code
-here to work, we must ensure that a no point a node has a non-zero |auxiliary|
-if its parent has a zero |auxiliary|.
+that zeros the |auxiliary| field of all reachable |dd_node|s. For the code here
+to work, we must ensure that at no point a node has a non-zero |auxiliary|
+while its parent has a zero |auxiliary|.
 
 @<Helpers@>=
 void dd_clean_auxiliary(int zdd) {
@@ -244,13 +245,13 @@ void dd_clean_auxiliary(int zdd) {
 @<Helpers@>=
 int dd_lookup(int v, int l, int h) { @+
   int hash = v * prime1 + l * prime2 + h * prime3;
-  hash = (hash >> (8 * sizeof(int) - dd_bits)) & ((1<<dd_bits)-1);
+  hash = (hash >> (32 - dd_bits)) & ((1<<dd_bits)-1);
   while (1) {
     struct dd_node *p = &dd_table[hash];
+    if (trace & trace_hash) printf("probe %d\n", hash);
     if (p->variable == 0) break;
     if (p->variable == v && p->low == l && p->high == h) break;
     hash = (hash + 1) & ((1<<dd_bits)-1);
-    if (trace & trace_hash) printf("try hash %d\n", hash);
   }
   return hash;
 }
@@ -265,7 +266,7 @@ int dd_insert(int v, int l, int h) { @+
   struct dd_node* r = &dd_table[hash];
   if (r->variable == 0) ++dd_table_used;
   check(dd_table_used > (1<<(dd_bits-1)), "dd_table is getting full");
-  if (trace&trace_hash) printf("dd_table_nodes %d\n", dd_table_used);
+  if (trace&trace_hash) printf("dd_table_used %d\n", dd_table_used);
   r->variable = v, r->low = l, r->high = h;
   return hash;
 }
@@ -273,7 +274,7 @@ int dd_insert(int v, int l, int h) { @+
 int zdd_insert(int v, int l, int h) 
 { @+ return h == dd_false? l: dd_insert(v, l, h); @+ }
 
-@ Initially, the set of conslicts is empty.
+@ Initially, the set of conflicts is empty.
 
 @<Globals@>=
 int conflicts = dd_false;
@@ -313,16 +314,9 @@ void add_conflict(int *v) { @+
 }
 
 
-@ The union of two ZDDs is easily expressed recursively.
-$$
-\eqalign{
-  (v, l_1, h_1) \lor (v, l_2, h_2) &= (v, l_1 \lor l_2, h_1 \lor h_2) \cr
-  (v_1, l_1, h_1) \lor (v_2, l_2, h_2) &= (v_1, l_1 \lor (v_2, l_2, h_2), h_1)
-    \qquad\hbox{\rm if $v_1<v_2$}.\cr
-}
-$$
-In order to not redo much work we need a memocache that remembers known facts
-of the form $a\cup b=c$.
+@ The union of two ZDDs is easily expressed recursively.  In order to not redo
+much work we need a memocache that remembers known facts of the form $a\cup
+b=c$.
 
 @<Data structures@>=
 struct dd_memo_data {
@@ -332,11 +326,58 @@ struct dd_memo_data {
 };
 
 @ @<Globals@>=
-struct dd_memo_data zdd_or[1<<dd_bits];
+struct dd_memo_data zdd_union_memo[1<<dd_bits];
+
+@ @<Helpers@>=
+int zdd_union(int z1, int z2) {
+  struct dd_node* n1 = &dd_table[z1];
+  struct dd_node* n2 = &dd_table[z2];
+  struct dd_memo_data* m = &zdd_union_memo[z1^z2];
+  if (z1 == dd_false) return z2;
+  if (z2 == dd_false) return z1;
+  if (z1 == dd_true && z2 == dd_true) return dd_true;
+  if (z1 == dd_true) 
+    return m->result = zdd_insert(n2->variable, zdd_union(dd_true, n2->low), n2->high);
+  if (z2 == dd_true) 
+    return m->result = zdd_insert(n1->variable, zdd_union(dd_true, n1->low), n1->high);
+  if (m->leftop == z1 && m->rightop == z2) return m->result;
+  if (n1->variable == n2->variable)
+    return m->result = zdd_insert(n1->variable, zdd_union(n1->low, n2->low), zdd_union(n1->high, n2->high));
+  else if (n1->variable < n2->variable)
+    return m->result = zdd_insert(n1->variable, zdd_union(n1->low, z2), n1->high);
+  else
+    return m->result = zdd_insert(n2->variable, zdd_union(z1, n2->low), n2->high);
+}
+
+@ Initially |leftop| is set to an impossible value, so that there aren't any
+`false' memocache hits.
+
+@<Initialize@>= { @+
+  for (int i = 0; i < (1<<dd_bits); ++i) zdd_union_memo[i].leftop=-3;
+}
+
+@ @<Print result@>= { @+
+  int seen[cnf_variables_count + 1];
+  memset(seen, 0, sizeof(seen));
+  mark_seen(conflicts, seen);
+  for (int i = 1; i <= cnf_variables_count; ++i) if (!seen[i])
+    printf("%d\n", i); 
+}
+
+@ @<Includes@>=
+#include <string.h>
+
+@ @<Helpers@>=
+void mark_seen(int z, int* seen) {
+  struct dd_node* n = &dd_table[z];
+  if (z == dd_false || z == dd_true || n->auxiliary) return;
+  n->auxiliary = 1;
+  seen[n->variable] = 1;
+  mark_seen(n->low, seen);
+  mark_seen(n->high, seen);
+}
+
 
 @* TODO.
-@ @<Helpers@>=
-int zdd_union(int z1, int z2) { return dd_false; }
-@ @<Print result@>=
 
 @* Index.
