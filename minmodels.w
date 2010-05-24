@@ -19,19 +19,21 @@ int main() @+ {
   @<Print result@>@;
 }
 
-@ The formula is represented internally very similar to how it appears in the
-input file.
+@ The DIMACS format starts with comment lines, continues with a header line,
+and the body follows. Comment lines start with |'c'|; the header line follows
+the format |"p cnf %d %d"|, where the first integer is the number of variables
+and the second integer is the number of clauses.  The body is a big list of
+space separated numbers, which typically spans multiple lines. A positive
+number represents a variable, a negative number represents a negated variable,
+and zero marks the end of a clause.
 
-@d cnf_max (1<<20) // maximum size of |cnf|
+Parsing is relaxed. It allows comment lines anywhere in the file, and defines a
+comment line as being one whose first {\sl non-space} character is~|'c'|. The
+number of clauses declared in the header line is checked in safe mode, but
+otherwise is ignored and the whole body is read.
 
-@<Globals@>=
-int cnf[cnf_max];
-int cnf_size; // |cnf[0]| to |cnf[cnf_size-1]| are meaningful
-int cnf_variables_count; 
-
-@ The following parsing procedure is forgiving and will succeed on invalid
-DIMACS files. All clauses are read, even if fewer are announced by the |"p cnf"|
-line.
+The result of parsing is that |cnf| contains the body and |cnf_variables_count|
+the number of variables announced on the header line.
 
 @s line foo
 
@@ -64,6 +66,13 @@ read_lines:
   }
 }
 
+@ @d cnf_max (1<<20) // maximum size of |cnf|
+
+@<Globals@>=
+int cnf[cnf_max];
+int cnf_size; // |cnf[0]| to |cnf[cnf_size-1]| are meaningful
+int cnf_variables_count; 
+
 @ @<Includes@>=
 #include <ctype.h>
 #include <stdio.h>
@@ -83,7 +92,7 @@ side-effects in the actual arguments for the |check| macro. Also, beware that a
 @d trace_search (1<<2)
 @d trace_hash (1<<3)
 @d trace_all (-1)
-@d trace (trace_models|trace_hash|trace_search) // what tracing is activated
+@d trace (trace_models) // what tracing is activated
 
 @ @<Includes@>=
 #include <stdlib.h>
@@ -170,138 +179,164 @@ int is_cnf_unsat(int *v, int v_fixed) {
   add_conflict(v);
 }
 
-@* Conflicts. Now the interesting part of this version. A conflict is a set of
-variables that cannot all be~$1$ in a minimal model yet to be seen. ZDDs are
-suitable for representing families of sets. Like BDDs, they are binary trees
-whose non-leafs have branches |low| and |high| and whose leafs are the booleans
-$0$~and~$1$.
+@* Conflicts. Subtrees of the search tree are sometimes not visited, because it
+is possible to determine early that none of their leafs satisfy~|cnf|. One
+mechanism partially evaluates~|cnf| on a partial variable assignment and
+another mechanism checks if the subtree's root (which is a search state) `hits'
+a conflict. For the purposes of this program, a {\sl conflict\/} is a set of
+literals that cannot all be in a minimal model.
+
+ZDDs are a data structure suitable for representing a family of sets from an
+ordered universe. A ZDD is a tree whose non-leafs have two distinguished
+children, |low| and |high|, and whose leafs are $0$~or~$1$. The |high| branch
+never points to leaf~$0$. Each non-leaf also has a |variable|. A child's
+|variable| is greater than the parent's |variable|. An |auxiliary| field is
+used by some algorithms.
+
+There is a similar data structure, the BDD, whose invariants are different.
+However, BDDs and ZDDs can co-exist and share memory, which is why there is
+only one data type.
 
 @<Data structures@>=
-typedef struct bdd_node_t {
+struct dd_node {
   int variable;
-  struct bdd_node_t *low, *high;
-} bdd_node;
+  int low;
+  int high;
+  int auxiliary;
+};
 
-@ The booleans are represented by two special pointers |bdd_false| and
-|bdd_true|.
+@ These nodes are kept in a hashtable so that no two nodes that contain the
+same three values in the fields |variable|,~|low|, and~|high| exist. This
+method of avoiding memory waste is called {\sl hash-consing}. The values of
+|low| and |high| are indexes in the hashtable if they are non-negative. The
+leafs $0$~and~$1$ are represented as $-1$~and~$-2$, respectively. The 
+hashtable uses linear probing. 
 
-@d bdd_false (&dummy_bdds[0])
-@d bdd_true (&dummy_bdds[1])
-
-@<Globals@>=
-bdd_node dummy_bdds[2];
-
-@ Both ZDDs and BDDs are hash-consed (aka reduced), meaning that there are no
-two distinct |bdd_node|s that have the same values in their fields. This is
-ensured by keeping |bdd_node|s in a hashtable. Whenever a |bdd_node| with a
-certain content is needed, we first lookup the hashtable to see if there isn't
-one already in there and, if there is, we reuse it.
-
-@d bdd_bits_per_hash 20
-@d bdd_table_size (1<<bdd_bits_per_hash)
-@d bdd_hash_mask (bdd_table_size - 1)
+@d dd_false (-1)
+@d dd_true (-2)
+@d dd_bits 20  // how many bits are used for the hash
 
 @<Globals@>=
-bdd_node bdd_table[bdd_table_size]; // |variable==0| means empty slot
-int bdd_table_empty = bdd_table_size; // used only in |safe| mode
+struct dd_node dd_table[1<<dd_bits]; // |variable==0| means empty slot
+int dd_table_used = 0; // used only in |safe| mode
 
-@ The function |bdd_lookup| computes the hash and does linear probing.
-(The type |long long| is used to avoid warnings on systems that have
-|sizeof(int) < sizeof(int*)|.)
- 
-@d prime1 1000003
-@d prime2 10000019
-@d prime3 100000007
+@ The simplest algorithm on |dd_node|s is a recursive depth-first traversal
+that zeros the |auxiliary| field of all reachable |dd_node|s. For the code
+here to work, we must ensure that a no point a node has a non-zero |auxiliary|
+if its parent has a zero |auxiliary|.
 
 @<Helpers@>=
-bdd_node* bdd_lookup(int v, bdd_node *l, bdd_node *h) { @+
-  int hash = v * prime1 + (long long) l * prime2 + (long long) h * prime3;
-  hash = (hash >> (8 * sizeof(int) - bdd_bits_per_hash)) & bdd_hash_mask;
-  while (1) {
-    bdd_node *p = &bdd_table[hash];
-    if (p->variable == 0) break;
-    if (p->variable == v && p->low == l && p->high == h) break;
-    hash = (hash + 1) & bdd_hash_mask;
-    if (trace & trace_hash) printf("try hash %d\n", hash);
-  }
-  return &bdd_table[hash];
+void dd_clean_auxiliary(int zdd) {
+  struct dd_node* n = &dd_table[zdd];
+  if (zdd < 0) return;
+  if (n->auxiliary == 0) return;
+  n->auxiliary = 0;
+  dd_clean_auxiliary(n->low);
+  dd_clean_auxiliary(n->high);
 }
 
-@ The function |generic_insert| uses |bdd_lookup| to find an empty slot or an
-existing node with the same structure. The function |bdd_insert| adds the
-constraint |high!=low|, while the function |zdd_insert| adds the constraint
-|high!=bdd_false|.
+@ The function |dd_lookup| computes the hash and does linear probing.
+ 
+@d prime1 0x678DDE6F
+@d prime2 0xB504F33B
+@d prime3 0xBB67AE93
 
 @<Helpers@>=
-bdd_node* generic_insert(int v, bdd_node *l, bdd_node *h) { @+
-  bdd_node* r = bdd_lookup(v, l, h);
-  if (r->variable == 0) --bdd_table_empty;
-  check(bdd_table_empty < bdd_table_size / 2, 
-      "The BDD hashtable is getting full.");
-  if (trace&trace_hash) 
-    printf("used bdd_nodes %d\n", bdd_table_size - bdd_table_empty);
+int dd_lookup(int v, int l, int h) { @+
+  int hash = v * prime1 + l * prime2 + h * prime3;
+  hash = (hash >> (8 * sizeof(int) - dd_bits)) & ((1<<dd_bits)-1);
+  while (1) {
+    struct dd_node *p = &dd_table[hash];
+    if (p->variable == 0) break;
+    if (p->variable == v && p->low == l && p->high == h) break;
+    hash = (hash + 1) & ((1<<dd_bits)-1);
+    if (trace & trace_hash) printf("try hash %d\n", hash);
+  }
+  return hash;
+}
+
+@ The function |dd_insert| uses |dd_lookup| to find an empty slot or an
+existing node with the same structure. The function |zdd_insert| adds the
+constraint |high!=dd_false|.
+
+@<Helpers@>=
+int dd_insert(int v, int l, int h) { @+
+  int hash = dd_lookup(v, l, h);
+  struct dd_node* r = &dd_table[hash];
+  if (r->variable == 0) ++dd_table_used;
+  check(dd_table_used > (1<<(dd_bits-1)), "dd_table is getting full");
+  if (trace&trace_hash) printf("dd_table_nodes %d\n", dd_table_used);
   r->variable = v, r->low = l, r->high = h;
+  return hash;
+}
+
+int zdd_insert(int v, int l, int h) 
+{ @+ return h == dd_false? l: dd_insert(v, l, h); @+ }
+
+@ Initially, the set of conslicts is empty.
+
+@<Globals@>=
+int conflicts = dd_false;
+
+@ A partial variable assignment contains all the literals in some conflict if
+there is a path from |conflicts| to |dd_true| that takes the |high| branch only
+if |variable| is set to~$1$ in the partial variable assignment. This test takes
+time linear in the size of the ZDD.
+
+@<Operations on conflicts@>=
+int hits_conflict_rec(int zdd, int *v, int v_fixed) {
+  struct dd_node* n = &dd_table[zdd];
+  if (zdd == dd_false) return 0;
+  if (zdd == dd_true) return 1;
+  if (n->auxiliary) return 0;
+  n->auxiliary = 1;
+  if (hits_conflict_rec(n->low, v, v_fixed)) return 1;
+  if (n->variable > v_fixed || !v[n->variable]) return 0;
+  return hits_conflict_rec(n->high, v, v_fixed);
+}
+
+int hits_conflict(int *v, int v_fixed) { @+
+  int r = hits_conflict_rec(conflicts, v, v_fixed);
+  dd_clean_auxiliary(conflicts);
   return r;
 }
 
-bdd_node* bdd_insert(int v, bdd_node *l, bdd_node *h) 
-{ @+ return l == h? l : generic_insert(v, l, h); @+ }
-
-bdd_node* zdd_insert(int v, bdd_node *l, bdd_node *h) 
-{ @+ return h == bdd_false? l: generic_insert(v, l, h); @+ }
-
-@ Given this infrastructure, the set of conflicts is simply a pointer to
-a |bdd_node|.
-
-@<Globals@>=
-bdd_node* conflicts = bdd_false;
-
-@ Now, after setting up the infrastructure for creating |bdd_node|s, it is
-time to see what they {\sl mean\/} in terms of conflicts.
-
-@<Operations on conflicts@>=
-int hits_conflict(int *v, int v_fixed) { @+
-  bdd_node *p = conflicts;
-  while (p != bdd_false && p != bdd_true) {
-    if (p->variable > v_fixed) return 0;
-    p = v[p->variable]? p->high: p->low;
-  }
-  return p == bdd_true;
-}
-
-@ Adding a conflict is a little more complicated. A generic way to compute the
-union of two families of conflicts is
-$$
-\eqalign{
-  (v, l_1, h_1) \lor (v, l_2, h_2) &= (v, l_1 \lor l_2, h_1 \lor h_2) \cr
-  (v_1, l_1, h_1) \lor (v_2, l_2, h_2) &=
-    (v_1, l_1 \lor (v_2, l_2, h_2), h_2 \lor (v_2, l_2, h_2))
-    \qquad\hbox{\rm if $v_1<v_2$}.\cr
-}
-$$
-The conflict $\{v_1,v_2,v_3\}$ is represented by $(v_1,0,(v_2,0,(v_3,0,1)))$.
+@ To add conflict $\{v_1,v_2,v_3\}$ we union the ZDD
+$(v_1,0,(v_2,0,(v_3,0,1)))$ to the ZDD |conflicts|.
 
 @<Operations on conflicts@>=
 void add_conflict(int *v) { @+
-  bdd_node *p = bdd_true;
+  int c = dd_true;
   for (int i = cnf_variables_count; i > 0; --i) if (v[i])
-    p = zdd_insert(i, bdd_false, p);
-  conflicts = zdd_or(conflicts, p);
+    c = zdd_insert(i, dd_false, c);
+  conflicts = zdd_union(conflicts, c);
 }
 
-@ @<Helpers@>=
-bdd_node* zdd_or(bdd_node *a, bdd_node *b) {
-  if (a == bdd_false) return b;
-  if (b == bdd_false) return a;
-  if (a == bdd_true || b == bdd_true) return bdd_true;
-  if (a->variable == b->variable)
-    return zdd_insert(a->variable, zdd_or(a->low, b->low), zdd_or(a->high, b->high));
-  if (a->variable < b->variable)
-    return zdd_or(b, a);
-  return zdd_insert(b->variable, zdd_or(a, b->low), zdd_or(a, b->high));
+
+@ The union of two ZDDs is easily expressed recursively.
+$$
+\eqalign{
+  (v, l_1, h_1) \lor (v, l_2, h_2) &= (v, l_1 \lor l_2, h_1 \lor h_2) \cr
+  (v_1, l_1, h_1) \lor (v_2, l_2, h_2) &= (v_1, l_1 \lor (v_2, l_2, h_2), h_1)
+    \qquad\hbox{\rm if $v_1<v_2$}.\cr
 }
+$$
+In order to not redo much work we need a memocache that remembers known facts
+of the form $a\cup b=c$.
+
+@<Data structures@>=
+struct dd_memo_data {
+  int leftop;
+  int rightop;
+  int result;
+};
+
+@ @<Globals@>=
+struct dd_memo_data zdd_or[1<<dd_bits];
 
 @* TODO.
+@ @<Helpers@>=
+int zdd_union(int z1, int z2) { return dd_false; }
 @ @<Print result@>=
 
 @* Index.
