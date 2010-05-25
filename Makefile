@@ -7,10 +7,10 @@ LDFLAGS=
 #CFLAGS=-std=c99 -g --coverage
 #LDFLAGS=--coverage
 
-EXE=sat minmodels
+EXE=sat minmodels zdd
 PDF=$(patsubst %,%.pdf,$(EXE))
 
-all :exe pdf
+all: exe pdf
 
 exe: $(EXE)
 
