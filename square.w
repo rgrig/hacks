@@ -15,6 +15,7 @@ in TAoCP~7.2.1.3.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+@<Debug@>@;
 @<Hashtable@>@;
 
 int main() {
@@ -31,11 +32,14 @@ int main() {
         @<Advance |p| or |break|@>@;
       }
     }
+if (0) for (int k=0;k<hsize;++k) if (htable[k]>=0) 
+printf("** %02x\n", htable[k]);
     printf("%d %d\n", n, hcount);
   }
 }
 
 @ @<Visit...@>= {
+if (0) printf("** p %02x\n", p);
   int shuffle = 0;
   int i, j; // indices in |w|
   int k; // index in |p| and |shuffle|
@@ -46,6 +50,7 @@ int main() {
       if ((w>>j++)&1) shuffle |= 1<<k;
     }
   }
+if(0)if (bitparity(shuffle)) printf("OOPS w=%x p=%02x s=%02x\n", w,p,shuffle);
   hash_insert(shuffle);
 }
 
@@ -62,11 +67,11 @@ int main() {
     } else {
       p |= (1<<(pj-2));
       p &= ~(1<<pj);
-      if (pr==pj) pr = pj-2>1? pj-1: 1;
+      if (pr==pj) pr = pj-2>1? pj-2: 1;
       else if (pr==pj-2) pr = pj-1;
     }
   } else {
-    if (!(pj&1)||(p>>(pj-1))&1) {
+    if (!(pj&1)||((p>>(pj-1))&1)) {
       p |= (1<<pj);
       p &= ~(1<<(pj-1));
       if (pr==pj && pj>1) pr = pj - 1;
@@ -95,7 +100,7 @@ void hash_clear() {
   memset(htable,-1,sizeof(htable));
 }
 
-int hash_insert(int x) {
+void hash_insert(int x) {
   int h = ((x * 2654435769) >> (32 - hbits)) & hmask;
   while (htable[h]>=0 && htable[h]!=x) h = (h+1)&hmask;
   if (htable[h]<0) {
@@ -107,3 +112,6 @@ int hash_insert(int x) {
     exit(1);
   }
 }
+
+@ @<Debug@>=
+int bitparity(int x) { return x==0? 0 : (x&1)^bitparity(x>>1); }

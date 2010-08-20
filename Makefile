@@ -1,13 +1,9 @@
-CC=gcc
-CWEAVE=cweave
-CTANGLE=ctangle
-TEX=tex
 CFLAGS=-Wall -W -pedantic -std=c99 -g -O3
 LDFLAGS=
 #CFLAGS=-std=c99 -g --coverage
 #LDFLAGS=--coverage
 
-EXE=sat minmodels zdd
+EXE=sat minmodels zdd square
 PDF=$(patsubst %,%.pdf,$(EXE))
 
 all: exe pdf
