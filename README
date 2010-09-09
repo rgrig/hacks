@@ -1,3 +1,7 @@
 Makefile      automates building from sources, as usual
+cyclomatic    counts branching keywords per functin in Java-like sources
+kd            kd-trees
 minmodels     finds the minimal models of a CNF formula (aka prime implicants)
 sat           a simple SAT solver
+square        generates bitstrings by merging two copies of a bitstring
+zdd           builds a zdd

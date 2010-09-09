@@ -3,7 +3,7 @@ LDFLAGS=
 #CFLAGS=-std=c99 -g --coverage
 #LDFLAGS=--coverage
 
-EXE=sat minmodels zdd square
+EXE=kd minmodels sat square zdd
 PDF=$(patsubst %,%.pdf,$(EXE))
 
 all: exe pdf

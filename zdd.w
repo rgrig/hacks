@@ -49,9 +49,9 @@ struct dd_node {
   int auxiliary;
 };
 
-@ All |dd_node|s are kept in a big hashtable, which is statically allocated
-for simplicity (and speed). Nodes will be identified by their index in this
-big table, except for |dd_fls| and |dd_tru|, which are denoted by negative
+@ All |dd_node|s are kept in a big hashtable, which is statically allocated for
+simplicity (and speed). Nodes will be identified by their index in this big
+table, except for |dd_fls| and |dd_tru|, which are represented by negative
 integers.
 
 @d dd_bits 20
