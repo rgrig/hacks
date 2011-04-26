@@ -3,7 +3,7 @@ LDFLAGS=-lreadline
 #CFLAGS=-std=c99 -g --coverage
 #LDFLAGS=--coverage
 
-EXE=kd minmodels sat square zdd
+EXE=kd minmodels sat square zdd turing
 PDF=$(patsubst %,%.pdf,$(EXE))
 
 all: exe pdf
