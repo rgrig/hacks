@@ -1,5 +1,5 @@
 CFLAGS=-Wall -W -pedantic -std=c99 -g -O3
-LDFLAGS=
+LDFLAGS=-lreadline
 #CFLAGS=-std=c99 -g --coverage
 #LDFLAGS=--coverage
 

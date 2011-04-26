@@ -342,7 +342,8 @@ int zdd_union(int z1, int z2) {
     return m->result = zdd_insert(n1->variable, zdd_union(dd_true, n1->low), n1->high);
   if (m->leftop == z1 && m->rightop == z2) return m->result;
   if (n1->variable == n2->variable)
-    return m->result = zdd_insert(n1->variable, zdd_union(n1->low, n2->low), zdd_union(n1->high, n2->high));
+    return m->result = zdd_insert(
+      n1->variable, zdd_union(n1->low, n2->low), zdd_union(n1->high, n2->high));
   else if (n1->variable < n2->variable)
     return m->result = zdd_insert(n1->variable, zdd_union(n1->low, z2), n1->high);
   else

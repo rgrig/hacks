@@ -77,7 +77,8 @@ tables of booleans |cache_a| and |cache_s|. The arguments of the functions
 
 @ @<Recognition@>=
 int snn; // a string of length $2n$ that is being recognized
-char cache_s[2*N+1][2*N+1]; // |cache_s[i][j]| says whether $S({\it snn}[i\dts j))$ may reach $\epsilon$
+char cache_s[2*N+1][2*N+1]; 
+  // |cache_s[i][j]| says whether $S({\it snn}[i\dts j))$ may reach $\epsilon$
 char cache_a[2*N+1][2*N+1][2*N+1][2*N+1];
 
 char a(int i, int j, int k, int l) { 
