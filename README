@@ -3,6 +3,7 @@ chess         http://code.google.com/codejam/contest/dashboard?c=619102#s=p2
 cyclomatic    counts branching keywords per functin in Java-like sources
 kd            kd-trees
 minmodels     finds the minimal models of a CNF formula (aka prime implicants)
+pos           char count to line:col
 quine         quine quine
 sat           a simple SAT solver
 square        generates bitstrings by merging two copies of a bitstring
