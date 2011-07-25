@@ -155,11 +155,12 @@ for (struct clause_node* c = all_clauses; c != all_clauses + clause_cnt; ++c) {
   c->p->n = c->n->p = c;
 }
 
-@ Backtracking is implemented using recursion. A partial
-evaluation step consists in removing literals from their clause
-list and in removing clauses from their list. To undo such a step
-we need to keep track of the literal that set to |true| and a
-list with the clauses that were removed.
+@ Backtracking is implemented using recursion. (TODO: However, I should switch
+to an iterative implementation because big instances crash the call stack.) A
+partial evaluation step consists in removing literals from their clause list
+and in removing clauses from their list. To undo such a step we need to keep
+track of the literal that set to |true| and a list with the clauses that were
+removed.
 
 The first thing to do is to check if the empty clause was derived.
 

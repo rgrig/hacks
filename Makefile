@@ -1,9 +1,9 @@
 CFLAGS=-Wall -W -pedantic -std=c99 -g -O3
 LDFLAGS=-lreadline
-#CFLAGS=-std=c99 -g --coverage
+#CFLAGS=-std=c99 -g -pg --coverage
 #LDFLAGS=--coverage
 
-EXE=kd minmodels sat square zdd turing
+EXE=kd minmodels sat square zdd ocid
 PDF=$(patsubst %,%.pdf,$(EXE))
 
 all: exe pdf
