@@ -12,12 +12,8 @@ exe: $(EXE)
 
 pdf: $(PDF)
 
-sat: sat.o
-
-minmodels: minmodels.o
-
 %.pdf: %.tex
-	pdftex $* 
+	pdftex $*
 
 clean:
 	rm -f *.o *.log *.idx *.scn *.toc

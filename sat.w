@@ -98,6 +98,10 @@ if (sscanf(linebuf, "p cnf %d %d", &var_cnt, &clause_cnt) != 2) {
   fprintf(stderr, "Input must contain\np cnf <varcnt> <clausecnt>\n");
   return 1;
 }
+if (var_cnt<0 || clause_cnt<0) {
+  fprintf(stderr, "The number of variables (and clauses) must be nonnegative.\n");
+  return 1;
+}
 all_clauses = malloc(clause_cnt*sizeof(struct clause_node));
 positive = malloc((var_cnt + 1)*sizeof(struct lit_node));
 negative = malloc((var_cnt + 1)*sizeof(struct lit_node));
