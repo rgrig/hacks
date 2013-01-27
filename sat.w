@@ -1,14 +1,12 @@
 \def\[#1,#2){[#1.\,.\>#2)}
 \def\[#1,#2]{[#1.\,.\>#2]}
 
-@* SAT. This program reads a CNF formula and answers SAT or
-UNSAT. The first line of the input starts with the string 
-|"p cnf "| followed by the number of variables~$m$ and the 
-number of clauses~$n$. Variables are numbers in the interval
-$\[1,m]$ and clauses are sets of variables. Starting from the
-second line, each clause is described by listing its variables
-and finishing with a~$0$. This format is understood also by
-MiniSAT.
+@* SAT. This program reads a CNF formula and answers SAT or UNSAT. The first
+line of the input starts with the string |"p cnf "| followed by the number of
+variables~$m$ and the number of clauses~$n$. Variables are numbers in the
+interval $\[1,m]$ and clauses are sets of variables. Starting from the second
+line, each clause is described by listing its variables and finishing with
+a~$0$. This format is understood by most SAT solvers, such as MiniSAT.
 
 @ The program systematically explores all truth assignments to
 variables until a satisfying truth assignment is found or all
@@ -28,7 +26,7 @@ result. Overall, the program looks as follows.
 
 int main() {
   @<Read the input@>;
-  printf(sat(0)? "SAT\n" : "UNSAT\n");
+  printf(sat()? "SAT\n" : "UNSAT\n");
   @<Clean up@>;
   return 0;
 }
@@ -159,25 +157,44 @@ for (struct clause_node* c = all_clauses; c != all_clauses + clause_cnt; ++c) {
   c->p->n = c->n->p = c;
 }
 
-@ Backtracking is implemented using recursion. (TODO: However, I should switch
-to an iterative implementation because big instances crash the call stack.) A
-partial evaluation step consists in removing literals from their clause list
-and in removing clauses from their list. To undo such a step we need to keep
-track of the literal that set to |true| and a list with the clauses that were
-removed.
+@ Backtracking is implemented without recursion, to avoid stack overflows on big
+instances.  The |model| lists the literals that are set to |true|.  A
+heuristic chooses the literal~|l| to try; after trying |l|, we try~|-l|.  The
+array |polarity| records whether we are trying the chosen literal (by |0|), or
+its inverse (by |1|), so that we can backtrack.
 
-The first thing to do is to check if the empty clause was derived.
+@d current_literal (model[model_size-1])
+@d current_polarity (polarity[model_size-1])
 
 @<Functions@>=
-int sat(int depth) {
-  int l; /* the literal that gets set to |true| */
+int sat() {
+  int *model; /* the literals that are currently set to |true| */
+  int *polarity; /* are we trying the guessed polarity, or its reverse? */
+  struct clause_node *rc; /* |rc[k]| are the removed clauses for |model[k]| */
+  int model_size; /* how many literals are set */
+  int sz; /* clause size */
+  @<Initialize backtracking@>;
+sat_explore:
   @<Check if trivially SAT or UNSAT@>;
-  @<Pick a literal |l|@>;
-  @<Set |l| to |true| and recurse@>;
-  l = -l;
-  @<Set |l| to |true| and recurse@>;
-  return 0;
+  @<Pick a |current_literal|@>;
+  for (current_polarity=0; current_polarity<2; ++current_polarity) {
+    @<Set |current_literal| and recurse@>;
+    current_literal = -current_literal;
+  }
+sat_return:
+  @<Finish exploring |current_literal|@>;
 }
+
+@ @<Initialize backtracking@>=
+model = malloc(var_cnt * sizeof (int));
+polarity = malloc(var_cnt * sizeof (int));
+rc = malloc(var_cnt * sizeof(struct clause_node));
+model_size = 0;
+
+@ @<Finish exploring...@>=
+if (model_size == 0) return 0;
+--model_size;
+goto sat_continue;
 
 @ The information that must be saved during a partial evaluation
 step so that it can be undone consist of (1)~the list of removed
@@ -191,38 +208,38 @@ There is no need to explicitly remove occurrences of |l| since it
 doesn't appear in any non-removed clause, so it won't be picked
 again by a subsequent partial evaluation step.
 
-@<Set |l|...@>= {
+@d current_rc (rc[model_size - 1])
+
+@<Set |current_literal|...@>= {
   struct lit_node *ln, *lln; /* literal nodes of interest */
   struct clause_node *cn, *ccn; /* clause nodes of interest */
-  struct clause_node rc; /* removed clauses */
-  int rsat; /* recursive result */
-  rc.p = rc.n = &rc, rc.clause = NULL;
+  current_rc.p = current_rc.n = &current_rc, current_rc.clause = NULL;
   if (verbose) {
-    for (int d=0;d<depth;++d) printf(" ");
-    printf("set %d\n", l);
+    for (int d=0;d<model_size;++d) printf(" ");
+    printf("set %d\n", current_literal);
   }
-  @<Partially evaluate formula for |l==true|@>;
-  if (verbose) printformula(depth);
-  rsat = sat(depth+1);
+  @<Partially evaluate formula for |current_literal|@>;
+  if (verbose) printformula(model_size);
+  goto sat_explore;
+sat_continue:
   if (verbose) {
-    for (int d=0;d<depth;++d) printf(" ");
-    printf("unset %d\n", l);
+    for (int d=0;d<model_size;++d) printf(" ");
+    printf("unset %d\n", current_literal);
   }
   @<Undo partial evaluation@>;
-  if (verbose) printformula(depth);
-  if (rsat) return 1;
+  if (verbose) printformula(model_size);
 }
 
-@ To partially evaluate a formula we remove occurrences of~|-l|
+@ To partially evaluate a formula we remove occurrences of~|-current_literal|
 from their clauses (but not from the global list of occurrences
-of~|-l|). We also remove clauses that contain~|l| and remove all
-ocurrences of other literals in removed clauses from their global
-lists (but not from the removed clause); the literal~|l| is an
-exception from this rule.
+of~|-current_literal|). We also remove clauses that contain~|current_literal|
+and remove all ocurrences of other literals in removed clauses from their
+global lists (but not from the removed clause); the literal~|current_literal|
+is an exception from this rule.
 
 
 @<Partially evaluate...@>=
-for (ln = lit_head(-l)->n; ln != lit_head(-l); ln = ln->n) {
+for (ln = lit_head(-current_literal)->n; ln != lit_head(-current_literal); ln = ln->n) {
   ln->pc->nc = ln->nc, ln->nc->pc = ln->pc;
   ln->pc = ln->nc = ln;
   cn = ln->clause;
@@ -231,24 +248,24 @@ for (ln = lit_head(-l)->n; ln != lit_head(-l); ln = ln->n) {
   cn->p = &formula[cn->size], cn->n = formula[cn->size].n;
   cn->p->n = cn->n->p = cn;
 }
-for (ln = lit_head(l)->n; ln != lit_head(l); ln = ln->n) {
+for (ln = lit_head(current_literal)->n; ln != lit_head(current_literal); ln = ln->n) {
   cn = ln->clause;
-  for (lln = cn->clause->nc; lln != cn->clause; lln = lln->nc) 
+  for (lln = cn->clause->nc; lln != cn->clause; lln = lln->nc)
     if (lln->literal != ln->literal) {
       lln->p->n = lln->n, lln->n->p = lln->p;
       lln->n = lln->p = lln;
     }
   cn->p->n = cn->n, cn->n->p = cn->p;
-  cn->p = &rc, cn->n = rc.n;
+  cn->p = &current_rc, cn->n = current_rc.n;
   cn->p->n = cn->n->p = cn;
 }
 
 @ Let's see if we know how to undo what we just did.
 
 @<Undo...@>=
-for (cn = rc.n; cn != &rc; cn = ccn) {
+for (cn = current_rc.n; cn != &current_rc; cn = ccn) {
   for (ln = cn->clause->nc; ln != cn->clause; ln = ln->nc) 
-    if (ln->literal != l) {
+    if (ln->literal != current_literal) {
       ln->p = lit_head(ln->literal), ln->n = lit_head(ln->literal)->n;
       ln->p->n = ln->n->p = ln;
     }
@@ -256,7 +273,7 @@ for (cn = rc.n; cn != &rc; cn = ccn) {
   cn->p = &formula[cn->size], cn->n = formula[cn->size].n;
   cn->p->n = cn->n->p = cn;
 }
-for (ln = lit_head(-l)->n; ln != lit_head(-l); ln = ln->n) {
+for (ln = lit_head(-current_literal)->n; ln != lit_head(-current_literal); ln = ln->n) {
   cn = ln->clause;
   ln->pc = cn->clause, ln->nc = cn->clause->nc;
   ln->pc->nc = ln->nc->pc = ln;
@@ -269,17 +286,17 @@ for (ln = lit_head(-l)->n; ln != lit_head(-l); ln = ln->n) {
 @ Recursion stops when the empty clause was derived, or no clause
 remains to be satisfied.
 
-@<Check if trivially SAT or UNSAT@>= 
-int sz; /* clause size */
-if (formula[0].n != &formula[0]) return 0;
+@<Check if trivially SAT or UNSAT@>=
+++model_size;
+if (formula[0].n != &formula[0]) goto sat_return;
 for (sz = 1; sz <= max_clause_size && formula[sz].n == &formula[sz]; ++sz);
 if (sz > max_clause_size) return 1;
 
 @ The literal we pick is some literal from one of the smallest
 clauses left.
 
-@<Pick a literal |l|@>=
-l = formula[sz].n->clause->nc->literal;
+@<Pick a |current_literal|@>=
+current_literal = formula[sz].n->clause->nc->literal;
 
 @ Debugging stuff.
 
