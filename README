@@ -8,4 +8,5 @@ pos           char count to line:col
 quine         quine quine
 sat           a simple SAT solver
 square        generates bitstrings by merging two copies of a bitstring
+vote          effect of threshold on coalition probabilities
 zdd           builds a zdd
