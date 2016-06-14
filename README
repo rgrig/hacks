@@ -5,6 +5,7 @@ gitwdiffstat  counts changed words in a git repo
 kd            kd-trees
 minmodels     finds the minimal models of a CNF formula (aka prime implicants)
 pos           char count to line:col
+randid        generates random strings of lowercase ascii
 quine         quine quine
 sat           a simple SAT solver
 square        generates bitstrings by merging two copies of a bitstring

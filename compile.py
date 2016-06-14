@@ -1,3 +1,6 @@
+# The main goal of this script is to be portable on all systems used by
+# my co-authors.  So, don't change stuff unless you test across many systems.
+
 import os
 import re
 import sys

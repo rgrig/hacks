@@ -4,13 +4,15 @@ using a character count, instead of a (line, column) pair.
 @s line foo
 @c
 #include <stdio.h>
+#include <string.h>
 
 int main(int argc, char* argv[]) {
   if (argc != 3) @<Display usage and exit@>@;
   int position;
   if (sscanf(argv[1],"%d",&position) != 1) @<Display usage and exit@>@;
   if (position < 0) @<Report outside file and finish@>@;
-  FILE* f = fopen(argv[2],"r");
+  FILE * f = stdin;
+  if (strcmp(argv[2], "-")) { printf("oops\n"); f = fopen(argv[2], "r"); }
   if (!f) @<Display usage and exit@>@;
   char c;
   int line = 1, column = 1;

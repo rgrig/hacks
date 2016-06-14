@@ -3,7 +3,7 @@ LDLIBS=-lreadline
 #CFLAGS=-std=c99 -g -pg --coverage
 #LDFLAGS=--coverage
 
-EXE=kd minmodels sat square zdd ocid pos
+EXE=kd minmodels sat square zdd ocid pos trieoops
 PDF=$(patsubst %,%.pdf,$(EXE))
 
 all: exe pdf

@@ -16,7 +16,7 @@ Its running time is therefore given by the recurrence
 $T(n)=2T(n/2)+f(n)$, where $f(n)$ is the number of operations
 needed to put the median in its proper place. Note that
 both $f(n)=\Theta(n)$ and $f(n)=\Theta(n\lg n)$ lead to
-$T(n)=\Theta(n\lg n)$, so assymptotically it doesn't matter if we
+$T(n)=\Theta(n\lg n)$, so asymptotically it doesn't matter if we
 use QuickSelect or QuickSort. The former should still be somewhat
 quicker in practice.
 

@@ -10,7 +10,7 @@ from subprocess import CalledProcessError, check_output
 try:
   added = 0
   removed = 0
-  command = ['git', 'diff'] + argv[1:] + ['--word-diff=porcelain']
+  command = ['git', 'diff'] + ['--word-diff=porcelain'] + argv[1:]
   for line in check_output(command, universal_newlines=True).splitlines():
     if line[0:1] == '+' and line[0:3] != '+++':
       added += len(line.split())

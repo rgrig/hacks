@@ -15,11 +15,13 @@ int main() {
   srand(0);
   for (int parties = 1; parties <= max_parties; ++parties) {
     for (int threshold = 0; threshold <= 100; ++threshold) {
+      int none_in_parliment = 0;
       int tries_left = tries;
       double fraction = 0.0;
       while (tries_left--) @<Add to |fraction|@>@;
-      fraction /= tries;
-      printf("%d %d %f\n",parties,threshold,fraction);
+      fraction /= (tries - none_in_parliment);
+      printf("%2d %3d %.02f %.02f\n",parties,threshold,fraction,
+        1.0*none_in_parliment/tries);
     }
   }
   return 0;
@@ -27,7 +29,7 @@ int main() {
 
 @
 @d max_parties 10
-@d tries 100
+@d tries 10000
 
 @<Add to |fraction|@>= {
   int i, j, k;
@@ -46,15 +48,17 @@ int main() {
       good_votes += votes[j];
     }
   }
-  parties = j;
-  ok_coalitions = 0;
-  for (i = 1; i < (1 << parties); ++i) {
-    coalition_votes = 0;
-    for (k = 0; k < parties; ++k) if ((i>>k)&1) coalition_votes += votes[k];
-    if (coalition_votes >= good_votes / 2) ++ok_coalitions;
-    if (0) printf("coalition_votes %d good_votes %d\n", coalition_votes,good_votes);
+  if (i == 0) ++none_in_parliment;
+  else {
+    ok_coalitions = 0;
+    for (j = 1; j < (1 << i); ++j) {
+      coalition_votes = 0;
+      for (k = 0; k < parties; ++k) if ((j>>k)&1) coalition_votes += votes[k];
+      if (coalition_votes >= good_votes / 2) ++ok_coalitions;
+      if (0) printf("coalition_votes %d good_votes %d\n", coalition_votes,good_votes);
+    }
+    fraction += 1.0 * ok_coalitions / ((1 << i) - 1);
   }
-  fraction += 1.0 * ok_coalitions / ((1 << parties) - 1);
 }
 
 @
