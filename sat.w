@@ -137,6 +137,10 @@ for (int i = 0; i < clause_cnt; ++i) {
   int l; /* for reading literal identifiers */
   struct lit_node* literal; /* the literal being read */
   if (scanf("%d",&l) != 1 || !l) break;
+  if (!(0 < abs(l) && abs(l) <= var_cnt)) {
+    fprintf(stderr, "Input has invalid literals.\n");
+    return 1;
+  }
   literal = malloc(sizeof(struct lit_node));
   literal->literal = l;
   literal->clause = clause;
