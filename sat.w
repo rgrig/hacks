@@ -4,9 +4,10 @@
 @* SAT. This program reads a CNF formula and answers SAT or UNSAT. The first
 line of the input starts with the string |"p cnf "| followed by the number of
 variables~$m$ and the number of clauses~$n$. Variables are numbers in the
-interval $\[1,m]$ and clauses are sets of variables. Starting from the second
-line, each clause is described by listing its variables and finishing with
-a~$0$. This format is understood by most SAT solvers, such as MiniSAT.
+interval $\[1,m]$. If $x$ is a variable, then both $x$ and $-x$ are literals.
+Clauses are sets of literals.  Starting from the second line, each clause is
+described by listing its literals and finishing with a~$0$. This format is
+understood by most SAT solvers, such as MiniSAT.
 
 @ The program systematically explores all truth assignments to
 variables until a satisfying truth assignment is found or all
@@ -52,7 +53,7 @@ struct lit_node {
 struct clause_node {
   struct clause_node* p; /* previous clause with the same size as this */
   struct clause_node* n; /* next clause with the same size as this */
-  struct lit_node* clause; /* |NULL| for the dummy */
+  struct lit_node* clause; /* |NULL| if |this| is a dummy */
   int size; /* the number of literals in this clause */
 };
 
@@ -192,12 +193,12 @@ rc = malloc(var_cnt * sizeof(struct clause_node));
 model_size = 0;
 
 @ @<Finish exploring...@>=
-if (model_size == 0) return 0;
 --model_size;
+if (model_size == 0) return 0;
 goto sat_continue;
 
 @ The information that must be saved during a partial evaluation
-step so that it can be undone consist of (1)~the list of removed
+step so that it can be undone consists of (1)~the list of removed
 clauses and (2)~the list of literal occurrences in removed
 clauses (other than |l|). This means that in order to remove a
 clause we spend time proportional to its size, which isn't great.
